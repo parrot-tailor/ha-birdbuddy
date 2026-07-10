@@ -231,6 +231,5 @@ class BirdBuddyUpdate(BirdBuddyMixin, UpdateEntity):
 
             self.__update_state = result
 
-        assert result.is_complete
         LOGGER.info("Bird Buddy update complete: %s", self.feeder.name)
         self.__update_state = None

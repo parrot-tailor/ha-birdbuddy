@@ -120,7 +120,7 @@ class RecentVisitors:
         LOGGER.info(
             "Listening for new visitors to feeder %s", self.feeder.name
         )
-        self.hass.add_job(self._update_latest_visitor)
+        self.hass.async_create_task(self._update_latest_visitor())
         return self.hass.bus.async_listen(
             EVENT_NEW_POSTCARD,
             self._on_new_postcard,

@@ -127,7 +127,7 @@ class BirdBuddyDataUpdateCoordinator(DataUpdateCoordinator[BirdBuddy]):
                 "species": [dict(s) for s in analysis.species],
                 "media": dict(media) if media else None,
             }
-            self.hass.bus.fire(
+            self.hass.bus.async_fire(
                 event_type=EVENT_NEW_POSTCARD,
                 event_data=data,
                 origin=EventOrigin.remote,
