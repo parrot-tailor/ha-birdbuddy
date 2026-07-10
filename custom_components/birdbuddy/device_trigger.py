@@ -27,11 +27,7 @@ from homeassistant.helpers.typing import ConfigType
 import voluptuous as vol
 
 from . import DOMAIN
-from .const import (
-    CONF_FEEDER_ID,
-    EVENT_NEW_POSTCARD_SIGHTING,
-    TRIGGER_TYPE_POSTCARD,
-)
+from .const import CONF_FEEDER_ID, EVENT_NEW_POSTCARD, TRIGGER_TYPE_POSTCARD
 from .hass_util import _feeder_id_for_device, _find_coordinator_by_device
 
 TRIGGER_TYPES = {TRIGGER_TYPE_POSTCARD}
@@ -126,15 +122,15 @@ async def async_attach_trigger(
             hass, config[CONF_DEVICE_ID]
         )
     if CONF_FEEDER_ID in config:
-        # Add the feeder id to the trigger event data. The event includes
-        # .sighting.feeder.id, which is what we trigger on.
-        event_data["sighting"] = {"feeder": {"id": config[CONF_FEEDER_ID]}}
+        # Add the feeder id to the trigger event data; the event carries it
+        # at the feeder_id key, which is what we trigger on.
+        event_data[CONF_FEEDER_ID] = config[CONF_FEEDER_ID]
     # voluptuous' Schema.__call__ is untyped; the validated event config is a
     # ConfigType dict at runtime.
     event_config = event_trigger.TRIGGER_SCHEMA(
         {
             CONF_PLATFORM: "event",
-            event_trigger.CONF_EVENT_TYPE: EVENT_NEW_POSTCARD_SIGHTING,
+            event_trigger.CONF_EVENT_TYPE: EVENT_NEW_POSTCARD,
             CONF_EVENT_DATA: event_data,
         }
     )

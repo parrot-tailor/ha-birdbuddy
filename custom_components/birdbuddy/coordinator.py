@@ -8,7 +8,6 @@ from birdbuddy.client import BirdBuddy
 from birdbuddy.feed import FeedNode, FeedNodeType
 from birdbuddy.feeder import Feeder
 from birdbuddy.media import Collection
-from birdbuddy.sightings import PostcardSighting, SightingFinishStrategy
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import CALLBACK_TYPE, EventOrigin, HomeAssistant
 from homeassistant.helpers.update_coordinator import (
@@ -17,8 +16,11 @@ from homeassistant.helpers.update_coordinator import (
 )
 
 from .const import (
+    CONF_FEEDER_ID,
+    CONF_POSTCARD_ID,
+    CONF_SHARE,
     DOMAIN,
-    EVENT_NEW_POSTCARD_SIGHTING,
+    EVENT_NEW_POSTCARD,
     LOGGER,
     POLLING_INTERVAL,
 )
@@ -77,13 +79,13 @@ class BirdBuddyDataUpdateCoordinator(DataUpdateCoordinator[BirdBuddy]):
         return self.visitors[feeder.id].register_callback(listener)
 
     async def _process_feed(self, feed: list[FeedNode]) -> None:
-        """Process new feed items, emitting an event for each new postcard.
+        """Process new feed items, emitting an event per new postcard.
 
-        There are options for how these can be processed:
-        - If the sighting contains a recognized bird, it can be finished
-          automatically via :func:`BirdBuddy.finish_postcard`.
-        - For all new postcards, emit a HA event and leave it to the user's
-          automations to finish them, however (and if) they want.
+        For each new postcard, run the AI identification with
+        ``BirdBuddy.identify_postcard`` and fire a slim
+        ``birdbuddy_new_postcard`` event carrying the recognized species and
+        media. Collecting is left to the user's automations, via the
+        ``birdbuddy.collect_postcard`` service.
 
         Args:
             feed: The feed nodes returned by the latest feed refresh.
@@ -103,36 +105,28 @@ class BirdBuddyDataUpdateCoordinator(DataUpdateCoordinator[BirdBuddy]):
         LOGGER.debug("Found postcards %s", postcards)
         for postcard in postcards:
             LOGGER.debug("A new postcard is ready to process: %s", postcard)
-            if not self.hass.bus.async_listeners().get(
-                EVENT_NEW_POSTCARD_SIGHTING
-            ):
-                # if no one is listening, no sense in getting sighting data
+            if not self.hass.bus.async_listeners().get(EVENT_NEW_POSTCARD):
+                # No listeners, so skip the identify API call.
                 LOGGER.debug(
-                    "No event listeners: skipping postcard conversion"
+                    "No event listeners: skipping postcard identification"
                 )
                 continue
 
-            # Emit a new event with sighting + postcard data, and expose
-            # services that can:
-            # 1. auto-collect a recognized bird
-            # 2. manually assign a species
-            # 3. auto-collect a best-guess species, using the report's
-            #    confidence
-            # 4. assign the sighting as "mystery visitor"
-            # 5. all-in-one service choosing the best of 1, 3, or 4
-            # Automations could use the sighting media URLs for extra AI
-            # processing (e.g. Merlin or other classifiers), then do #2 with
-            # the results. If viable, we can supply a Recipe in docs showing
-            # how, plus default blueprints to handle it with user input.
-            sighting = await self.client.sighting_from_postcard(
-                postcard=postcard
-            )
+            # Identify the visitor (species + media) without collecting, then
+            # fire a slim event. Automations collect via the service; the
+            # payload stays small enough for HA's 32 KiB event limit.
+            analysis = await self.client.identify_postcard(postcard)
+            media = next(iter(analysis.medias), None)
             data = {
-                "postcard": postcard.data,
-                "sighting": sighting.data,
+                CONF_POSTCARD_ID: analysis.id,
+                CONF_FEEDER_ID: (
+                    analysis.feeder.id if analysis.feeder else None
+                ),
+                "species": [dict(s) for s in analysis.species],
+                "media": dict(media) if media else None,
             }
             self.hass.bus.fire(
-                event_type=EVENT_NEW_POSTCARD_SIGHTING,
+                event_type=EVENT_NEW_POSTCARD,
                 event_data=data,
                 origin=EventOrigin.remote,
             )
@@ -182,35 +176,20 @@ class BirdBuddyDataUpdateCoordinator(DataUpdateCoordinator[BirdBuddy]):
         """Handle the ``birdbuddy.collect_postcard`` service call.
 
         Args:
-            data: The service payload with ``postcard`` and ``sighting`` keys
-                plus optional ``strategy``, ``best_guess_confidence``, and
-                ``share_media`` options.
+            data: The service payload with a ``postcard_id`` and an optional
+                ``share`` flag.
 
         Returns:
             True if the postcard was collected to Media.
         """
-        sighting = PostcardSighting(data["sighting"])
-        postcard_id = data["postcard"]["id"]
-        strategy = SightingFinishStrategy(data.get("strategy", "recognized"))
-        confidence = data.get("best_guess_confidence")
-        share_media = data.get("share_media", False)
-
+        postcard_id = data[CONF_POSTCARD_ID]
+        share = data.get(CONF_SHARE, False)
         LOGGER.debug(
-            "Calling collect_postcard: id=%s, sighting=%s, strategy=%s",
-            postcard_id,
-            sighting,
-            strategy,
+            "Calling collect_postcard: id=%s, share=%s", postcard_id, share
         )
-        success = await self.client.finish_postcard(
-            postcard_id,
-            sighting,
-            strategy,
-            confidence_threshold=confidence,
-            share_media=share_media,
+        # collect_postcard raises on failure; reaching here means success.
+        collected = await self.client.collect_postcard(
+            postcard_id, share=share
         )
-        if success:
-            LOGGER.info("Postcard collected to Media")
-        else:
-            # TODO(jhansche): more info
-            LOGGER.warning("Postcard could not be collected")
-        return success
+        LOGGER.info("Collected postcard %s to Media", postcard_id)
+        return bool(collected)

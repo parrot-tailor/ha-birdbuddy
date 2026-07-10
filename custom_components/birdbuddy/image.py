@@ -116,7 +116,7 @@ class BirdBuddyRecentVisitorImageEntity(BirdBuddyMixin, ImageEntity):
         self._update_url(visitors.latest_media)
         self.async_write_ha_state()
 
-    def _update_url(self, media: Media) -> None:
+    def _update_url(self, media: Media | None) -> None:
         """Update the cached image URL from a media item.
 
         Sets the image URL when the media has an unexpired content or

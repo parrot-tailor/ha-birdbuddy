@@ -3,7 +3,6 @@
 from datetime import timedelta
 import logging
 
-from homeassistant.const import CONF_DEVICE_ID
 from homeassistant.helpers import config_validation as cv
 import voluptuous as vol
 
@@ -16,25 +15,16 @@ MANUFACTURER = "Bird Buddy, Inc."
 POLLING_INTERVAL = timedelta(minutes=10)
 
 CONF_FEEDER_ID = "feeder_id"
+CONF_POSTCARD_ID = "postcard_id"
+CONF_SHARE = "share"
 TRIGGER_TYPE_POSTCARD = "new_postcard"
-EVENT_NEW_POSTCARD_SIGHTING = f"{DOMAIN}_new_postcard_sighting"
+EVENT_NEW_POSTCARD = f"{DOMAIN}_new_postcard"
 
 SERVICE_COLLECT_POSTCARD = "collect_postcard"
 SERVICE_SCHEMA_COLLECT_POSTCARD = vol.Schema(
     {
-        vol.Required("postcard"): cv.has_at_least_one_key("id"),
-        vol.Required("sighting"): {
-            vol.Required("sightingReport"): {},
-            vol.Required("feeder"): vol.All(
-                cv.has_at_least_one_key("id"),
-                cv.has_at_least_one_key("name"),
-            ),
-            vol.Extra: object,
-        },
-        vol.Optional(CONF_DEVICE_ID): cv.string,
-        vol.Optional("strategy"): cv.string,
-        vol.Optional("best_guess_confidence"): vol.Coerce(int),
-        vol.Optional("share_media"): vol.Coerce(bool),
-    },
-    extra=vol.ALLOW_EXTRA,
+        vol.Required(CONF_POSTCARD_ID): cv.string,
+        vol.Optional(CONF_FEEDER_ID): cv.string,
+        vol.Optional(CONF_SHARE): cv.boolean,
+    }
 )
