@@ -141,7 +141,7 @@ def _setup_services(hass: HomeAssistant) -> None:
             # factory reset and re-paired while still belonging to the same
             # user. Assuming that, move on to the next available coordinator,
             # even if it no longer has the same feeder id.
-            coordinator = next(iter(hass.data[DOMAIN].values()))
+            coordinator = next(iter(hass.data[DOMAIN].values()), None)
             if coordinator:
                 LOGGER.warning(
                     "Feeder with id '%s' not found: trying %s",
