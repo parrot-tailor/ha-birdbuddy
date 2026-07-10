@@ -148,7 +148,7 @@ def _setup_services(hass: HomeAssistant) -> None:
                     list(coordinator.feeders.keys()),
                 )
             else:
-                msg = "Feeder with id '{feeder_id}' not found."
+                msg = f"Feeder with id '{feeder_id}' not found."
                 raise ValueError(msg)
 
         await coordinator.handle_collect_postcard(service.data)
